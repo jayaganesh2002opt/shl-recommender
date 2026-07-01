@@ -67,10 +67,12 @@ def extract_context(messages: List[Message]) -> Dict[str, Any]:
         resp = _ensure_client().chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            response_format={"type": "json_object"}
+            temperature=0.0
         )
         raw = resp.choices[0].message.content.strip()
+        # Strip possible markdown fences
+        raw = re.sub(r"^```json\s*", "", raw)
+        raw = re.sub(r"```$", "", raw)
         return json.loads(raw)
     except Exception:
         return {"enough_to_recommend": False}
@@ -194,10 +196,12 @@ def generate_recommendations(
         resp = _ensure_client().chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            response_format={"type": "json_object"}
+            temperature=0.0
         )
         raw = resp.choices[0].message.content.strip()
+        # Strip possible markdown fences
+        raw = re.sub(r"^```json\s*", "", raw)
+        raw = re.sub(r"```$", "", raw)
         data = json.loads(raw)
         reply = data.get("reply", "Here are my recommendations.")
         selected_names = data.get("selected", [])
