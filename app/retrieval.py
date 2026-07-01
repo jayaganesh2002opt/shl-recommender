@@ -3,11 +3,9 @@ Retrieval module: loads catalog.json, builds a TF-IDF index on first use,
 and provides keyword search over SHL assessments.
 """
 import json
-import os
 from pathlib import Path
 from typing import List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
-import numpy as np
 
 # Lazy imports — loaded once at startup
 _vectorizer = None
