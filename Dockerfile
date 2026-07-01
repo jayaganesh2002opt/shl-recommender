@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY data/ ./data/
 
-# Expose port
-EXPOSE 8000
+# Expose port for Hugging Face Spaces
+EXPOSE 7860
 
-# Run
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run on Hugging Face Spaces default port
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

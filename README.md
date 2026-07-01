@@ -44,6 +44,29 @@ curl -X POST http://localhost:8000/chat \
   }'
 ```
 
+## Deploy to Hugging Face Spaces (Free)
+
+1. Go to https://huggingface.co/spaces
+2. Click "Create new Space"
+3. Select "Docker" as Space SDK
+4. Name it: `shl-recommender`
+5. Make it Public
+6. Clone the Space locally:
+   ```bash
+   git clone https://huggingface.co/spaces/YOUR_USERNAME/shl-recommender
+   cd shl-recommender
+   ```
+7. Copy all files from this repo to the Space
+8. Commit and push:
+   ```bash
+   git add .
+   git commit -m "Initial deploy"
+   git push
+   ```
+9. Go to your Space settings → Repository → Secrets
+10. Add secret: `GEMINI_API_KEY` = your_key
+11. The Space will automatically rebuild
+
 ## Deploy to Render (Free)
 
 1. Push this repo to GitHub
