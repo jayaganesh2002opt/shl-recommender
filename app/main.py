@@ -19,7 +19,7 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Initialize retrieval index on startup."""
-    print("[startup] Building FAISS index...")
+    print("[startup] Building TF-IDF index...")
     retrieval.initialize()
     print("[startup] Ready.")
     yield
