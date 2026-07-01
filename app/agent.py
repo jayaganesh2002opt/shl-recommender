@@ -74,7 +74,8 @@ def extract_context(messages: List[Message]) -> Dict[str, Any]:
         raw = re.sub(r"^```json\s*", "", raw)
         raw = re.sub(r"```$", "", raw)
         return json.loads(raw)
-    except Exception:
+    except Exception as e:
+        print(f"[extract_context error] {type(e).__name__}: {e}")
         return {"enough_to_recommend": False}
 
 
@@ -113,7 +114,8 @@ def classify_intent(messages: List[Message]) -> str:
             if valid in intent:
                 return valid
         return "CLARIFY"
-    except Exception:
+    except Exception as e:
+        print(f"[classify_intent error] {type(e).__name__}: {e}")
         return "CLARIFY"
 
 
