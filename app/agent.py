@@ -13,11 +13,22 @@ from app import retrieval
 from app.models import Message, Recommendation
 
 # Configure Gemini
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
-# Use Flash for speed (fits within 30s timeout)
-_model = genai.GenerativeModel("gemini-1.5-flash")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    _model = genai.GenerativeModel(GEMINI_MODEL)
+else:
+    _model = None
+
+
+def _ensure_model():
+    if _model is None:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured. Set it in Render environment variables."
+        )
+    return _model
 
 # ── Scope guard ───────────────────────────────────────────────────────────────
 OFF_TOPIC_KEYWORDS = [
@@ -54,7 +65,7 @@ def extract_context(messages: List[Message]) -> Dict[str, Any]:
     conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages)
     prompt = _CONTEXT_PROMPT.format(conversation=conversation)
     try:
-        resp = _model.generate_content(prompt)
+        resp = _ensure_model().generate_content(prompt)
         raw = resp.text.strip()
         # Strip possible markdown fences
         raw = re.sub(r"^```json\s*", "", raw)
@@ -89,7 +100,7 @@ def classify_intent(messages: List[Message]) -> str:
     conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages[-6:])
     prompt = _INTENT_PROMPT.format(last_message=last, conversation=conversation)
     try:
-        resp = _model.generate_content(prompt)
+        resp = _ensure_model().generate_content(prompt)
         intent = resp.text.strip().upper()
         for valid in ["CLARIFY", "RECOMMEND", "REFINE", "COMPARE", "OFF_TOPIC", "GREETING"]:
             if valid in intent:
@@ -115,7 +126,7 @@ def generate_clarify(messages: List[Message]) -> str:
     conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages[-6:])
     prompt = _CLARIFY_PROMPT.format(conversation=conversation)
     try:
-        resp = _model.generate_content(prompt)
+        resp = _ensure_model().generate_content(prompt)
         return resp.text.strip()
     except Exception:
         return "Could you tell me more about the role you're hiring for and the seniority level?"
@@ -171,7 +182,7 @@ def generate_recommendations(
     )
 
     try:
-        resp = _model.generate_content(prompt)
+        resp = _ensure_model().generate_content(prompt)
         raw = resp.text.strip().lstrip("```json").rstrip("```").strip()
         data = json.loads(raw)
         reply = data.get("reply", "Here are my recommendations.")
@@ -244,7 +255,7 @@ def generate_compare(messages: List[Message]) -> str:
 
     prompt = _COMPARE_PROMPT.format(items=items_text, question=last_msg)
     try:
-        resp = _model.generate_content(prompt)
+        resp = _ensure_model().generate_content(prompt)
         return resp.text.strip()
     except Exception:
         return f"Here is what I know from the catalog:\n\n{items_text}"

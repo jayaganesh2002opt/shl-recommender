@@ -3,6 +3,7 @@ Retrieval module: loads catalog.json, builds a TF-IDF index on first use,
 and provides keyword search over SHL assessments.
 """
 import json
+import threading
 from pathlib import Path
 from typing import List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -13,6 +14,7 @@ _VECTORIZER = None
 _TFIDF_MATRIX = None
 _catalog: List[Dict[str, Any]] = []
 _texts: List[str] = []
+_init_lock = threading.Lock()
 
 
 def _get_catalog_path() -> Path:
@@ -42,19 +44,26 @@ def _build_text(item: Dict[str, Any]) -> str:
 
 def initialize():
     """Build the TF-IDF index. Called once at server startup."""
-    global _VECTORIZER, _TFIDF_MATRIX, _catalog, _texts  # noqa: E501
+    global _VECTORIZER, _TFIDF_MATRIX, _catalog, _texts  # noqa
 
-    _catalog = _load_catalog()
-    _texts = [_build_text(item) for item in _catalog]
+    if _VECTORIZER is not None:
+        return
 
-    _VECTORIZER = TfidfVectorizer(
-        stop_words='english',
-        max_features=1000,
-        ngram_range=(1, 2)
-    )
-    _TFIDF_MATRIX = _VECTORIZER.fit_transform(_texts)
+    with _init_lock:
+        if _VECTORIZER is not None:
+            return
 
-    print(f"[retrieval] Indexed {len(_catalog)} assessments with TF-IDF.")
+        _catalog = _load_catalog()
+        _texts = [_build_text(item) for item in _catalog]
+
+        _VECTORIZER = TfidfVectorizer(
+            stop_words='english',
+            max_features=1000,
+            ngram_range=(1, 2)
+        )
+        _TFIDF_MATRIX = _VECTORIZER.fit_transform(_texts)
+
+        print(f"[retrieval] Indexed {len(_catalog)} assessments with TF-IDF.")
 
 
 def search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
@@ -62,7 +71,6 @@ def search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
     if _VECTORIZER is None:
         initialize()
 
-    # Transform query to TF-IDF
     query_vec = _VECTORIZER.transform([query])
 
     # Compute cosine similarity

@@ -4,8 +4,10 @@ Endpoints:
   GET  /health  → {"status": "ok"}
   POST /chat    → ChatResponse
 """
-import json
+import os
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -15,14 +17,23 @@ from app import retrieval, agent
 
 load_dotenv()
 
+_startup_pool = ThreadPoolExecutor(max_workers=1)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Initialize retrieval index on startup."""
-    print("[startup] Building TF-IDF index...")
-    retrieval.initialize()
+    """Warm the retrieval index in the background so /health responds immediately."""
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
+    if not api_key:
+        print("[startup] WARNING: GEMINI_API_KEY is not set — /chat will not work.")
+    else:
+        print("[startup] GEMINI_API_KEY detected.")
+
+    print("[startup] Warming TF-IDF index in background...")
+    _startup_pool.submit(retrieval.initialize)
     print("[startup] Ready.")
     yield
+    _startup_pool.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -39,9 +50,20 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+def root() -> dict:
+    """Root endpoint for basic service status."""
+    return {
+        "service": "SHL Assessment Recommender",
+        "status": "ok",
+        "health": "/health",
+        "chat": "/chat",
+    }
+
+
 @app.get("/health")
 def health() -> dict:
-    """Health check endpoint."""
+    """Health check endpoint — must respond quickly for Render."""
     return {"status": "ok"}
 
 
@@ -66,8 +88,8 @@ def chat(request: ChatRequest):
 
     try:
         reply, recommendations, end_of_conversation = agent.process(request.messages)
-    except (json.JSONDecodeError, RuntimeError, ValueError) as e:
-        print(f"[agent error] {e}")
+    except Exception as e:
+        print(f"[agent error] {type(e).__name__}: {e}")
         return ChatResponse(
             reply="I encountered an issue processing your request. Could you rephrase your query?",
             recommendations=[],
