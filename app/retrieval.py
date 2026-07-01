@@ -42,7 +42,7 @@ def _build_text(item: Dict[str, Any]) -> str:
 
 def initialize():
     """Build the TF-IDF index. Called once at server startup."""
-    global _VECTORIZER, _TFIDF_MATRIX, _catalog, _texts
+    global _VECTORIZER, _TFIDF_MATRIX, _catalog, _texts  # noqa: E501
 
     _catalog = _load_catalog()
     _texts = [_build_text(item) for item in _catalog]
