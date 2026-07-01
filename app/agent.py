@@ -7,28 +7,27 @@ import json
 import re
 from typing import List, Dict, Any, Tuple
 
-import google.generativeai as genai
+from groq import Groq
 
 from app import retrieval
 from app.models import Message, Recommendation
 
-# Configure Gemini
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
+# Configure Groq
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    _model = genai.GenerativeModel(GEMINI_MODEL)
+if GROQ_API_KEY:
+    _client = Groq(api_key=GROQ_API_KEY)
 else:
-    _model = None
+    _client = None
 
 
-def _ensure_model():
-    if _model is None:
+def _ensure_client():
+    if _client is None:
         raise RuntimeError(
-            "GEMINI_API_KEY is not configured. Set it in Render environment variables."
+            "GROQ_API_KEY is not configured. Set it in Render environment variables."
         )
-    return _model
+    return _client
 
 # ── Scope guard ───────────────────────────────────────────────────────────────
 OFF_TOPIC_KEYWORDS = [
@@ -65,11 +64,13 @@ def extract_context(messages: List[Message]) -> Dict[str, Any]:
     conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages)
     prompt = _CONTEXT_PROMPT.format(conversation=conversation)
     try:
-        resp = _ensure_model().generate_content(prompt)
-        raw = resp.text.strip()
-        # Strip possible markdown fences
-        raw = re.sub(r"^```json\s*", "", raw)
-        raw = re.sub(r"```$", "", raw)
+        resp = _ensure_client().chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+        raw = resp.choices[0].message.content.strip()
         return json.loads(raw)
     except Exception:
         return {"enough_to_recommend": False}
@@ -100,8 +101,12 @@ def classify_intent(messages: List[Message]) -> str:
     conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages[-6:])
     prompt = _INTENT_PROMPT.format(last_message=last, conversation=conversation)
     try:
-        resp = _ensure_model().generate_content(prompt)
-        intent = resp.text.strip().upper()
+        resp = _ensure_client().chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0
+        )
+        intent = resp.choices[0].message.content.strip().upper()
         for valid in ["CLARIFY", "RECOMMEND", "REFINE", "COMPARE", "OFF_TOPIC", "GREETING"]:
             if valid in intent:
                 return valid
@@ -126,8 +131,12 @@ def generate_clarify(messages: List[Message]) -> str:
     conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages[-6:])
     prompt = _CLARIFY_PROMPT.format(conversation=conversation)
     try:
-        resp = _ensure_model().generate_content(prompt)
-        return resp.text.strip()
+        resp = _ensure_client().chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        return resp.choices[0].message.content.strip()
     except Exception:
         return "Could you tell me more about the role you're hiring for and the seniority level?"
 
@@ -182,8 +191,13 @@ def generate_recommendations(
     )
 
     try:
-        resp = _ensure_model().generate_content(prompt)
-        raw = resp.text.strip().lstrip("```json").rstrip("```").strip()
+        resp = _ensure_client().chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+        raw = resp.choices[0].message.content.strip()
         data = json.loads(raw)
         reply = data.get("reply", "Here are my recommendations.")
         selected_names = data.get("selected", [])
@@ -255,8 +269,12 @@ def generate_compare(messages: List[Message]) -> str:
 
     prompt = _COMPARE_PROMPT.format(items=items_text, question=last_msg)
     try:
-        resp = _ensure_model().generate_content(prompt)
-        return resp.text.strip()
+        resp = _ensure_client().chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        return resp.choices[0].message.content.strip()
     except Exception:
         return f"Here is what I know from the catalog:\n\n{items_text}"
 

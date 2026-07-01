@@ -23,11 +23,11 @@ _startup_pool = ThreadPoolExecutor(max_workers=1)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Warm the retrieval index in the background so /health responds immediately."""
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
+    api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        print("[startup] WARNING: GEMINI_API_KEY is not set — /chat will not work.")
+        print("[startup] WARNING: GROQ_API_KEY is not set — /chat will not work.")
     else:
-        print("[startup] GEMINI_API_KEY detected.")
+        print("[startup] GROQ_API_KEY detected.")
 
     print("[startup] Warming TF-IDF index in background...")
     _startup_pool.submit(retrieval.initialize)
