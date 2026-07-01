@@ -14,7 +14,7 @@ from app.models import Message, Recommendation
 
 # Configure Groq
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama3-70b-8192")
 
 if GROQ_API_KEY:
     _client = Groq(api_key=GROQ_API_KEY)

@@ -9,5 +9,5 @@ services:
       - key: GROQ_API_KEY
         sync: false  # Set this manually in Render dashboard
       - key: GROQ_MODEL
-        value: llama3-8b-8192
+        value: llama3-70b-8192
     healthCheckPath: /health
