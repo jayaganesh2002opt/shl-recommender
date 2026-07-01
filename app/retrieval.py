@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Lazy imports — loaded once at startup
 _vectorizer = None
@@ -67,7 +68,6 @@ def search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
     query_vec = _vectorizer.transform([query])
 
     # Compute cosine similarity
-    from sklearn.metrics.pairwise import cosine_similarity
     similarities = cosine_similarity(query_vec, _tfidf_matrix).flatten()
 
     # Get top-k indices
@@ -97,6 +97,7 @@ def get_by_names(names: List[str]) -> List[Dict[str, Any]]:
 
 
 def get_all() -> List[Dict[str, Any]]:
+    """Return all catalog items."""
     global _catalog
     if not _catalog:
         _catalog = _load_catalog()
