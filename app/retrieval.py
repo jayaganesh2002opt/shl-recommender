@@ -9,8 +9,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Lazy imports — loaded once at startup
-_vectorizer = None
-_tfidf_matrix = None
+_VECTORIZER = None
+_TFIDF_MATRIX = None
 _catalog: List[Dict[str, Any]] = []
 _texts: List[str] = []
 
@@ -42,33 +42,31 @@ def _build_text(item: Dict[str, Any]) -> str:
 
 def initialize():
     """Build the TF-IDF index. Called once at server startup."""
-    global _vectorizer, _tfidf_matrix, _catalog, _texts
+    global _VECTORIZER, _TFIDF_MATRIX, _catalog, _texts
 
     _catalog = _load_catalog()
     _texts = [_build_text(item) for item in _catalog]
 
-    _vectorizer = TfidfVectorizer(
+    _VECTORIZER = TfidfVectorizer(
         stop_words='english',
         max_features=1000,
         ngram_range=(1, 2)
     )
-    _tfidf_matrix = _vectorizer.fit_transform(_texts)
+    _TFIDF_MATRIX = _VECTORIZER.fit_transform(_texts)
 
     print(f"[retrieval] Indexed {len(_catalog)} assessments with TF-IDF.")
 
 
 def search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
     """Return top_k catalog items for a query string using TF-IDF."""
-    global _vectorizer, _tfidf_matrix, _catalog, _texts
-
-    if _vectorizer is None:
+    if _VECTORIZER is None:
         initialize()
 
     # Transform query to TF-IDF
-    query_vec = _vectorizer.transform([query])
+    query_vec = _VECTORIZER.transform([query])
 
     # Compute cosine similarity
-    similarities = cosine_similarity(query_vec, _tfidf_matrix).flatten()
+    similarities = cosine_similarity(query_vec, _TFIDF_MATRIX).flatten()
 
     # Get top-k indices
     top_indices = similarities.argsort()[-top_k:][::-1]
@@ -82,14 +80,12 @@ def search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 
 def get_by_names(names: List[str]) -> List[Dict[str, Any]]:
     """Fetch specific assessments by name (case-insensitive partial match)."""
-    global _catalog
-    if not _catalog:
-        _catalog = _load_catalog()
+    catalog = _catalog if _catalog else _load_catalog()
 
     found = []
     for name in names:
         name_lower = name.lower().strip()
-        for item in _catalog:
+        for item in catalog:
             if name_lower in item["name"].lower() or item["name"].lower() in name_lower:
                 found.append(item)
                 break
@@ -98,7 +94,5 @@ def get_by_names(names: List[str]) -> List[Dict[str, Any]]:
 
 def get_all() -> List[Dict[str, Any]]:
     """Return all catalog items."""
-    global _catalog
-    if not _catalog:
-        _catalog = _load_catalog()
-    return _catalog
+    catalog = _catalog if _catalog else _load_catalog()
+    return catalog
