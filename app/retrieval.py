@@ -1,17 +1,19 @@
 """
-Retrieval module: loads catalog.json, builds a FAISS index on first use,
-and provides semantic search over SHL assessments.
+Retrieval module: loads catalog.json, builds a TF-IDF index on first use,
+and provides keyword search over SHL assessments.
 """
 import json
 import os
-import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any
+from sklearn.feature_extraction.text import TfidfVectorizer
+import numpy as np
 
 # Lazy imports — loaded once at startup
-_index = None
+_vectorizer = None
+_tfidf_matrix = None
 _catalog: List[Dict[str, Any]] = []
-_embeddings_model = None
+_texts: List[str] = []
 
 
 def _get_catalog_path() -> Path:
@@ -26,7 +28,7 @@ def _load_catalog() -> List[Dict[str, Any]]:
 
 
 def _build_text(item: Dict[str, Any]) -> str:
-    """Combine fields into a single string for embedding."""
+    """Combine fields into a single string for TF-IDF."""
     types = ", ".join(item.get("test_type", []))
     levels = ", ".join(item.get("job_levels", []))
     keywords = ", ".join(item.get("keywords", []))
@@ -40,47 +42,41 @@ def _build_text(item: Dict[str, Any]) -> str:
 
 
 def initialize():
-    """Build the FAISS index. Called once at server startup."""
-    global _index, _catalog, _embeddings_model
-
-    try:
-        from sentence_transformers import SentenceTransformer
-        import faiss
-    except ImportError:
-        raise RuntimeError("sentence-transformers and faiss-cpu are required.")
+    """Build the TF-IDF index. Called once at server startup."""
+    global _vectorizer, _tfidf_matrix, _catalog, _texts
 
     _catalog = _load_catalog()
-    _embeddings_model = SentenceTransformer("all-MiniLM-L6-v2")
+    _texts = [_build_text(item) for item in _catalog]
 
-    texts = [_build_text(item) for item in _catalog]
-    embeddings = _embeddings_model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
-    embeddings = embeddings.astype(np.float32)
+    _vectorizer = TfidfVectorizer(
+        stop_words='english',
+        max_features=1000,
+        ngram_range=(1, 2)
+    )
+    _tfidf_matrix = _vectorizer.fit_transform(_texts)
 
-    dim = embeddings.shape[1]
-    _index = faiss.IndexFlatIP(dim)  # Inner product (cosine after normalization)
-
-    # Normalize for cosine similarity
-    faiss.normalize_L2(embeddings)
-    _index.add(embeddings)
-
-    print(f"[retrieval] Indexed {len(_catalog)} assessments.")
+    print(f"[retrieval] Indexed {len(_catalog)} assessments with TF-IDF.")
 
 
 def search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
-    """Return top_k catalog items for a query string."""
-    global _index, _catalog, _embeddings_model
+    """Return top_k catalog items for a query string using TF-IDF."""
+    global _vectorizer, _tfidf_matrix, _catalog, _texts
 
-    if _index is None:
+    if _vectorizer is None:
         initialize()
 
-    import faiss
+    # Transform query to TF-IDF
+    query_vec = _vectorizer.transform([query])
 
-    q_emb = _embeddings_model.encode([query], convert_to_numpy=True).astype(np.float32)
-    faiss.normalize_L2(q_emb)
+    # Compute cosine similarity
+    from sklearn.metrics.pairwise import cosine_similarity
+    similarities = cosine_similarity(query_vec, _tfidf_matrix).flatten()
 
-    distances, indices = _index.search(q_emb, top_k)
+    # Get top-k indices
+    top_indices = similarities.argsort()[-top_k:][::-1]
+
     results = []
-    for idx in indices[0]:
+    for idx in top_indices:
         if idx < len(_catalog):
             results.append(_catalog[idx])
     return results
